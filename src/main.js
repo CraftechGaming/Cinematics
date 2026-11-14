@@ -1,7 +1,7 @@
 // Sunset Bay — bootstrap, main loop, player controller, camera and menus.
 import * as THREE from 'three';
 import { G, RES, HALF, lerp, clamp, damp, angLerp, collideCircle, save, loadSave, loadSettings } from './ctx.js';
-import { initInput, keys, hit, consume, mouse, axis, endFrame } from './input.js';
+import { initInput, keys, hit, consume, mouse, axis, endFrame, throttle, pollGamepad, touch, isTouch } from './input.js';
 import { buildWorld, buildEnv, groundY } from './world.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -25,6 +25,8 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, 16 / 9, 0.3, 4000);
 Object.assign(G, { scene, camera, renderer, look: new THREE.Vector3() });
 
+const coarse = navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches; // phone / tablet
+if (coarse) Object.assign(G.settings, { res: '720p', quality: 'medium' }); // lighter defaults; saved settings override
 loadSettings();
 const world = buildWorld(scene), env = buildEnv(scene, renderer);
 // HDR pipeline: multisampled float target -> bloom -> filmic tone mapping
@@ -32,22 +34,44 @@ const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1280, 
 const bloom = new UnrealBloomPass(new THREE.Vector2(1280, 720), 0.3, 0.7, 1.0);
 composer.addPass(new RenderPass(scene, camera)); composer.addPass(bloom); composer.addPass(new OutputPass());
 
+const QUALITY = { high: { msaa: 4, bloom: true, shadow: 1 }, medium: { msaa: 2, bloom: true, shadow: 0.5 }, low: { msaa: 0, bloom: false, shadow: 0.5 } };
+// Auto mode: if the frame rate stays low, step graphics down, then resolution.
+let slow = 0;
+function autoTune(fps) {
+  if (!G.settings.auto || G.state !== 'play' || document.hidden) { slow = 0; return; }
+  slow = fps < 22 ? slow + 1 : 0;
+  if (slow < 8) return; // ~4 seconds of low frame rate
+  slow = 0;
+  const s = G.settings;
+  if (s.quality === 'high') s.quality = 'medium'; else if (s.quality === 'medium') s.quality = 'low';
+  else if (s.res === '2160p') s.res = '1080p'; else if (s.res === '1080p') s.res = '720p'; else return;
+  applyResolution(); save(); banner('', 'Graphics adjusted for smoother play', 2200);
+}
+
 // The game always renders at the exact chosen resolution (1280x720, 1920x1080 or 3840x2160)
 // into a 16:9 stage that is scaled to fit the window.
 function applyResolution() {
-  const [w, h] = RES[G.settings.res];
+  // Height is exactly 720 / 1080 / 2160; width follows the screen shape (16:9 screens get 1280 / 1920 / 3840).
+  const h = RES[G.settings.res][1], w = Math.round((h * aspect) / 2) * 2;
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  const q = QUALITY[G.settings.quality] || QUALITY.high;
   renderer.setSize(w, h, false);
-  composer.renderTarget1.samples = composer.renderTarget2.samples = h > 1080 ? 2 : 4;
+  composer.renderTarget1.samples = composer.renderTarget2.samples = Math.min(q.msaa, h > 1080 ? 2 : 4);
   composer.setSize(w, h);
-  env.setShadowSize({ '720p': 1024, '1080p': 2048, '2160p': 4096 }[G.settings.res]);
+  bloom.enabled = q.bloom;
+  env.setShadowSize(Math.max(1024, { '720p': 1024, '1080p': 2048, '2160p': 4096 }[G.settings.res] * q.shadow));
   for (const b of document.querySelectorAll('#res button')) b.classList.toggle('sel', b.dataset.res === G.settings.res);
-  $('resnote').textContent = `Rendering at ${w} × ${h}. ${G.settings.res === '2160p' ? '4K needs a strong graphics card — drop to 1080p if it feels slow.' : ''}`;
+  for (const b of document.querySelectorAll('#quality button')) b.classList.toggle('sel', b.dataset.q === (G.settings.auto ? 'auto' : G.settings.quality));
+  $('resnote').textContent = `Rendering at ${w} × ${h}, ${G.settings.quality} graphics. ${G.settings.auto ? 'Auto lowers graphics, then resolution, if the game runs slowly.' : ''}`;
 }
 function fitStage() {
-  const s = Math.min(document.body.clientWidth / 16, document.body.clientHeight / 9);
-  stage.style.width = s * 16 + 'px'; stage.style.height = s * 9 + 'px'; stage.style.fontSize = (s * 9) / 100 + 'px';
+  const W = document.body.clientWidth, H = document.body.clientHeight || 1;
+  const a = clamp(W / H, 4 / 3, 2.4), sw = Math.min(W, H * a), sh = sw / a; // fill the screen between 4:3 and 21:9
+  stage.style.width = sw + 'px'; stage.style.height = sh + 'px'; stage.style.fontSize = sh / 100 + 'px';
+  if (Math.abs(a - aspect) > 0.01) { aspect = a; clearTimeout(fitT); fitT = setTimeout(applyResolution, booted ? 250 : 0); }
 }
-addEventListener('resize', fitStage); fitStage(); applyResolution();
+let aspect = 16 / 9, fitT = 0, booted = false;
+addEventListener('resize', fitStage); addEventListener('orientationchange', () => setTimeout(fitStage, 300)); applyResolution(); fitStage(); booted = true;
 
 // ---------------------------------------------------------------- actors
 const player = G.player = { x: 40, y: 0, z: 39, vy: 0, ry: Math.PI, speed: 0, phase: 0, amp: 0, car: null, human: makeHuman({ skin: 0xe0ac7e, hair: 0x2b1d14, shirt: 0xff5d73, pants: 0x264b77 }) };
@@ -73,7 +97,8 @@ function bounds(o) {
 function updateOnFoot(dt) {
   const p = player, a = axis();
   const mx = -Math.sin(cam.yaw) * a.y + Math.cos(cam.yaw) * a.x, mz = -Math.cos(cam.yaw) * a.y - Math.sin(cam.yaw) * a.x;
-  const len = Math.hypot(mx, mz), run = keys.has('ShiftLeft') || keys.has('ShiftRight') || len > 0.9 && a.x % 1 !== 0;
+  const len = Math.hypot(mx, mz), analog = touch.on || Math.abs(a.x % 1) + Math.abs(a.y % 1) > 0; // stick: push far to run
+  const run = keys.has('ShiftLeft') || keys.has('ShiftRight') || (analog && len > 0.85);
   p.speed = lerp(p.speed, len > 0.1 ? (run ? 8.5 : 4.2) * Math.min(1, len) : 0, damp(10, dt));
   if (len > 0.1) {
     p.ry = angLerp(p.ry, Math.atan2(mx, mz), damp(12, dt));
@@ -95,7 +120,7 @@ function updateOnFoot(dt) {
 function updateDriving(dt) {
   const v = player.car, a = axis();
   const before = v.v;
-  driveVehicle(v, dt, a.y, a.x, keys.has('Space'));
+  driveVehicle(v, dt, throttle(), a.x, keys.has('Space'));
   const o = { x: v.x, z: v.z };
   if (collideCircle(o, 1.5)) {
     if (Math.abs(before) > 6) { sfx('bump'); cam.shake = Math.min(0.5, Math.abs(before) * 0.02); }
@@ -175,15 +200,29 @@ function startPlay(fresh) {
   initAudio(); sfx('ui'); show(null); showHud(true);
   if (fresh) newGame();
   else { const d = loadSave(); if (d) Object.assign(G, d); placeAtGarage(); applyUnlocks(); G.state = 'play'; }
-  if (!('ontouchstart' in window)) canvas.requestPointerLock?.()?.catch?.(() => {});
+  lock();
 }
+function lock() { if (!isTouch() && !coarse) try { canvas.requestPointerLock?.()?.catch?.(() => {}); } catch { /* not available here */ } }
 $('b-new').onclick = () => startPlay(true);
 $('b-continue').onclick = () => startPlay(false);
-$('b-resume').onclick = () => { sfx('ui'); setState('play'); canvas.requestPointerLock?.()?.catch?.(() => {}); };
+$('b-resume').onclick = () => { sfx('ui'); setState('play'); lock(); };
 $('b-quit').onclick = () => { save(); setState('menu'); refreshMenu(); };
 for (const b of document.querySelectorAll('[data-open]')) b.onclick = () => { initAudio(); sfx('ui'); subFrom = G.state; show(b.dataset.open); };
 for (const b of document.querySelectorAll('[data-close]')) b.onclick = () => { sfx('ui'); save(); show(subFrom); };
 for (const b of document.querySelectorAll('#res button')) b.onclick = () => { G.settings.res = b.dataset.res; applyResolution(); sfx('ui'); };
+for (const b of document.querySelectorAll('#quality button')) b.onclick = () => {
+  if (b.dataset.q === 'auto') G.settings.auto = true; else { G.settings.auto = false; G.settings.quality = b.dataset.q; }
+  applyResolution(); sfx('ui');
+};
+for (const b of document.querySelectorAll('.b-full')) {
+  const root = document.documentElement;
+  if (!root.requestFullscreen) b.hidden = true;
+  b.onclick = () => { try { (document.fullscreenElement ? document.exitFullscreen() : root.requestFullscreen())?.catch?.(() => {}); } catch { /* not allowed here */ } };
+}
+document.addEventListener('touchmode', () => {
+  $('skip').textContent = 'ACT — Skip';
+  document.querySelector('#replayui .help').textContent = 'ACT — Next camera · REPLAY — Exit';
+});
 $('s-music').value = G.settings.music; $('s-sfx').value = G.settings.sfx;
 $('s-music').oninput = (e) => { G.settings.music = +e.target.value; applyVolume(); };
 $('s-sfx').oninput = (e) => { G.settings.sfx = +e.target.value; applyVolume(); };
@@ -193,10 +232,16 @@ addEventListener('blur', () => { if (G.state === 'play') setState('pause'); });
 
 // ---------------------------------------------------------------- main loop
 const clock = new THREE.Clock();
-let frame = 0, fpsT = performance.now(), fpsN = 0, muted = false;
+let frame = 0, fpsT = performance.now(), fpsN = 0, muted = false, shownState = null;
 function tick() {
   requestAnimationFrame(tick);
+  pollGamepad();
   const dt = Math.min(clock.getDelta(), 0.05), st = G.state;
+  if (shownState !== st) { // show only the touch buttons that make sense right now
+    shownState = st;
+    for (const b of document.querySelectorAll('#touch [data-in]')) b.hidden = !b.dataset.in.split(' ').includes(st);
+  }
+  document.body.classList.toggle('driving', !!player.car);
   G.time += dt; frame++;
   const sim = st === 'play' || st === 'dialogue' || st === 'cutscene' || st === 'menu';
 
@@ -250,7 +295,7 @@ function tick() {
   composer.render();
   if (G.wantPhoto) { G.wantPhoto = false; capturePhoto(renderer); }
 
-  fpsN++; const now = performance.now(); if (now - fpsT >= 500) { setBadge(Math.round((fpsN * 1000) / (now - fpsT))); fpsN = 0; fpsT = now; }
+  fpsN++; const now = performance.now(); if (now - fpsT >= 500) { const fps = Math.round((fpsN * 1000) / (now - fpsT)); setBadge(fps); autoTune(fps); fpsN = 0; fpsT = now; }
   endFrame();
 }
 

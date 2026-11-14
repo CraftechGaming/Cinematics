@@ -6,7 +6,7 @@ export const G = {
   state: 'menu',            // menu | play | dialogue | cutscene | replay | photo | pause
   time: 0, tod: 16.6,         // tod = time of day in hours
   money: 0, mission: 0, stars: [], unlocked: { pebble: true },
-  settings: { res: '1080p', music: 0.5, sfx: 0.7 },
+  settings: { res: '1080p', quality: 'high', auto: true, music: 0.5, sfx: 0.7 },
   colliders: [], vehicles: [], peds: [], npcs: {},
   player: null, camera: null, scene: null, renderer: null,
   active: null,             // active mission

@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Sunset Bay — Open World Driving Adventure</title>
 <link rel="stylesheet" href="css/style.css">
 <script type="importmap">
@@ -48,12 +50,13 @@
   <div id="photoui" class="layer">
     <div class="tag">◉ PHOTO MODE</div>
     <div class="panel">
-      <div>Filter: <b id="pfilter">None</b> <span>(F)</span></div>
+      <div>Filter: <b id="pfilter">None</b> <span class="kb">(F)</span></div>
       <div>Zoom: <b id="pfov">50</b> <span>(Wheel)</span></div>
       <div>Time: <b id="ptime">17:00</b> <span>([ ])</span></div>
-      <div>Move: WASD · Q/E down/up · Shift fast</div>
-      <button id="psnap">Capture (Enter)</button>
-      <button id="pexit">Exit (P)</button>
+      <div class="kb">Move: WASD · Q/E down/up · Shift fast</div>
+      <button id="pnext">Next filter</button>
+      <button id="psnap">Capture</button>
+      <button id="pexit">Exit photo mode</button>
     </div>
   </div>
 
@@ -67,6 +70,7 @@
       <button id="b-new">New Game</button>
       <button data-open="settings">Settings</button>
       <button data-open="controls">Controls</button>
+      <button class="b-full">Fullscreen</button>
     </div>
     <div class="rating">E · Family friendly — no violence, no mature content</div>
   </div>
@@ -90,6 +94,14 @@
         <button data-res="2160p">2160p<small>4K Ultra HD</small></button>
       </div>
     </div>
+    <div class="row"><label>Graphics</label>
+      <div class="seg" id="quality">
+        <button data-q="auto">Auto<small>Recommended</small></button>
+        <button data-q="high">High<small>Best looking</small></button>
+        <button data-q="medium">Medium<small>Tablets</small></button>
+        <button data-q="low">Low<small>Fastest</small></button>
+      </div>
+    </div>
     <div class="row"><label>Music</label><input type="range" id="s-music" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Sound</label><input type="range" id="s-sfx" min="0" max="1" step="0.05"></div>
     <p class="note" id="resnote"></p>
@@ -109,17 +121,24 @@
       <tr><td>P</td><td><b>Photo Mode</b> — free camera, filters, save a picture</td></tr>
       <tr><td>M</td><td>Mute music</td></tr>
       <tr><td>Esc</td><td>Pause</td></tr>
+      <tr><td>Touch</td><td>Left stick to move or steer · drag the screen to look · on-screen buttons</td></tr>
+      <tr><td>Gamepad</td><td>Sticks · RT gas · LT brake · A action · B jump / drift · Y replay · Start pause</td></tr>
     </table>
     <div class="buttons"><button data-close>Back</button></div>
   </div>
 
   <div id="touch">
-    <div id="joy"><div id="nub"></div></div>
-    <div class="tb" data-key="KeyE,KeyF" style="right:4em;bottom:18em">ACT</div>
-    <div class="tb" data-key="Space" style="right:16em;bottom:8em">JUMP<br>BRAKE</div>
-    <div class="tb sm" data-key="KeyR" style="right:4em;bottom:34em">REPLAY</div>
-    <div class="tb sm" data-key="Escape" style="right:4em;top:3em">II</div>
+    <div id="joy" data-in="play photo"><div id="nub"></div></div>
+    <div class="tb" data-key="KeyE,KeyF,KeyC" data-in="play dialogue cutscene replay photo" style="right:3em;bottom:19em">ACT</div>
+    <div class="tb foot" data-key="Space" data-in="play" style="right:3em;bottom:6em">JUMP</div>
+    <div class="tb car" data-key="KeyW" data-in="play" style="right:3em;bottom:6em">GAS</div>
+    <div class="tb car" data-key="KeyS" data-in="play" style="right:16em;bottom:4em">BRAKE</div>
+    <div class="tb sm car" data-key="Space" data-in="play" style="right:22em;bottom:22em">DRIFT</div>
+    <div class="tb sm" data-key="KeyR" data-in="play replay" style="right:4em;top:13em">REPLAY</div>
+    <div class="tb sm" data-key="KeyP" data-in="play" style="right:13em;top:13em">PHOTO</div>
+    <div class="tb sm" data-key="Escape" data-in="play" style="right:22em;top:13em">II</div>
   </div>
+  <div id="rotate">Turn your device sideways to play</div>
 
   <div id="fade"></div>
   <div id="loading">Loading Sunset Bay…</div>

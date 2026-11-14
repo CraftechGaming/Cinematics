@@ -6,8 +6,10 @@ const el = {};
 for (const id of ['hud', 'money', 'clock', 'badge', 'objective', 'timer', 'prompt', 'speedo', 'kmh', 'carname', 'minimap', 'bars', 'subtitle', 'skip', 'banner', 'fade']) el[id] = $(id);
 const set = (e, t) => { if (e._t !== t) { e._t = t; e.innerHTML = t; } };
 
-export const setPrompt = (t) => set(el.prompt, t || '');
-export const setObjective = (t) => set(el.objective, t || '');
+// On touch screens the E / F keys are the on-screen ACT button.
+const word = (t) => (t && document.body.classList.contains('touch') ? t.replace(/<b>[EF]<\/b>/g, '<b>ACT</b>') : t || '');
+export const setPrompt = (t) => set(el.prompt, word(t));
+export const setObjective = (t) => set(el.objective, word(t));
 export function setTimer(s) {
   set(el.timer, s == null ? '' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`);
   el.timer.classList.toggle('low', s != null && s < 15);

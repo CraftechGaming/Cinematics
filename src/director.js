@@ -5,7 +5,7 @@
 //    current render resolution (up to 3840x2160).
 import * as THREE from 'three';
 import { G, lerp, clamp, angLerp, RES } from './ctx.js';
-import { hit, keys, mouse, axis } from './input.js';
+import { hit, keys, mouse, axis, press } from './input.js';
 import { poseHuman, syncVehicle } from './entities.js';
 import { setBars, showHud, fmtTime, $ } from './ui.js';
 import { sfx } from './audio.js';
@@ -133,11 +133,12 @@ export function updatePhoto(dt, cam) {
   cam.fov = ph.fov; cam.updateProjectionMatrix(); refresh();
 }
 $('psnap').onclick = () => { G.wantPhoto = true; };
+$('pnext').onclick = () => press('KeyF');
 $('pexit').onclick = () => stopPhoto();
 
 // Called right after a render so the WebGL buffer still holds the frame.
 export function capturePhoto(renderer) {
-  const [w, h] = RES[G.settings.res];
+  const w = renderer.domElement.width, h = renderer.domElement.height;
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const ctx = c.getContext('2d'); ctx.filter = FILTERS[ph.filter][1]; ctx.drawImage(renderer.domElement, 0, 0, w, h);
   c.toBlob((blob) => {

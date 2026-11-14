@@ -51,7 +51,14 @@ Then open http://localhost:8080 (any static web server works; there is no build 
 | M | Mute music |
 | Esc | Pause |
 
-Touch devices get an on-screen stick and buttons.
+**Touch (iPad, tablets, phones in landscape):** left stick to walk or steer, drag the screen to
+look, and on-screen ACT / JUMP / GAS / BRAKE / DRIFT / REPLAY / PHOTO buttons.
+**Gamepad:** sticks, RT gas, LT brake, A action, B jump or drift, Y replay, Start pause.
+
+On 16:9 screens the picture is exactly 1280×720, 1920×1080 or 3840×2160; on other screen
+shapes (such as an iPad) the height stays the same and the width follows the screen.
+Graphics quality (Auto / High / Medium / Low) is in *Settings*; Auto steps down if the
+frame rate stays low.
 
 ## Code map
 
