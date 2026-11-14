@@ -1,0 +1,7 @@
+{
+  "name": "sunset-bay",
+  "version": "1.0.0",
+  "description": "Sunset Bay — a family-friendly 3D open-world driving adventure for the browser",
+  "private": true,
+  "scripts": { "start": "node server.js" }
+}

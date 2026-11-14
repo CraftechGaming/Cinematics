@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Sunset Bay — Open World Driving Adventure</title>
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/addons/" } }
+</script>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+
+  <div id="hud" class="layer">
+    <div id="money">$0</div>
+    <div id="clock">17:00</div>
+    <div id="badge">1080p</div>
+    <div id="objective"></div>
+    <div id="timer"></div>
+    <div id="prompt"></div>
+    <div id="speedo"><b id="kmh">0</b><span>km/h</span><i id="carname"></i></div>
+    <canvas id="minimap" width="220" height="220"></canvas>
+    <div id="keys">R Replay · P Photo · Esc Pause</div>
+  </div>
+
+  <div id="bars" class="layer"><div class="bar top"></div><div class="bar bot"></div></div>
+  <div id="subtitle" class="layer"></div>
+  <div id="skip" class="layer">Enter — Skip</div>
+
+  <div id="dialogue">
+    <div class="who"></div>
+    <div class="text"></div>
+    <div class="choices"></div>
+    <div class="hint">E / Space — Continue</div>
+  </div>
+
+  <div id="banner" class="layer"><h1></h1><p></p></div>
+
+  <div id="replayui" class="layer">
+    <div class="tag">● DIRECTOR REPLAY</div>
+    <div class="cam" id="replaycam"></div>
+    <div class="track"><div id="replaybar"></div></div>
+    <div class="help">Space Pause · C Next camera · Tab Slow-mo · ←/→ Scrub · R Exit</div>
+  </div>
+
+  <div id="photoui" class="layer">
+    <div class="tag">◉ PHOTO MODE</div>
+    <div class="panel">
+      <div>Filter: <b id="pfilter">None</b> <span>(F)</span></div>
+      <div>Zoom: <b id="pfov">50</b> <span>(Wheel)</span></div>
+      <div>Time: <b id="ptime">17:00</b> <span>([ ])</span></div>
+      <div>Move: WASD · Q/E down/up · Shift fast</div>
+      <button id="psnap">Capture (Enter)</button>
+      <button id="pexit">Exit (P)</button>
+    </div>
+  </div>
+
+  <div id="menu" class="screen">
+    <div class="title">
+      <h1>SUNSET <span>BAY</span></h1>
+      <h2>Open World Driving Adventure</h2>
+    </div>
+    <div class="buttons" id="menu-main">
+      <button id="b-continue">Continue</button>
+      <button id="b-new">New Game</button>
+      <button data-open="settings">Settings</button>
+      <button data-open="controls">Controls</button>
+    </div>
+    <div class="rating">E · Family friendly — no violence, no mature content</div>
+  </div>
+
+  <div id="pause" class="screen dim">
+    <h1 class="small">PAUSED</h1>
+    <div class="buttons">
+      <button id="b-resume">Resume</button>
+      <button data-open="settings">Settings</button>
+      <button data-open="controls">Controls</button>
+      <button id="b-quit">Main Menu</button>
+    </div>
+  </div>
+
+  <div id="settings" class="screen dim sub">
+    <h1 class="small">SETTINGS</h1>
+    <div class="row"><label>Resolution</label>
+      <div class="seg" id="res">
+        <button data-res="720p">720p<small>HD</small></button>
+        <button data-res="1080p">1080p<small>Full HD</small></button>
+        <button data-res="2160p">2160p<small>4K Ultra HD</small></button>
+      </div>
+    </div>
+    <div class="row"><label>Music</label><input type="range" id="s-music" min="0" max="1" step="0.05"></div>
+    <div class="row"><label>Sound</label><input type="range" id="s-sfx" min="0" max="1" step="0.05"></div>
+    <p class="note" id="resnote"></p>
+    <div class="buttons"><button data-close>Back</button></div>
+  </div>
+
+  <div id="controls" class="screen dim sub">
+    <h1 class="small">CONTROLS</h1>
+    <table>
+      <tr><td>W A S D / Arrows</td><td>Walk · Drive</td></tr>
+      <tr><td>Mouse</td><td>Look around (click the game to capture)</td></tr>
+      <tr><td>Shift</td><td>Run</td></tr>
+      <tr><td>Space</td><td>Jump · Handbrake</td></tr>
+      <tr><td>F</td><td>Get in / out of your car</td></tr>
+      <tr><td>E</td><td>Talk · Continue dialogue</td></tr>
+      <tr><td>R</td><td><b>Director Replay</b> — rewatch your last 15 seconds like a movie</td></tr>
+      <tr><td>P</td><td><b>Photo Mode</b> — free camera, filters, save a picture</td></tr>
+      <tr><td>M</td><td>Mute music</td></tr>
+      <tr><td>Esc</td><td>Pause</td></tr>
+    </table>
+    <div class="buttons"><button data-close>Back</button></div>
+  </div>
+
+  <div id="touch">
+    <div id="joy"><div id="nub"></div></div>
+    <div class="tb" data-key="KeyE,KeyF" style="right:4em;bottom:18em">ACT</div>
+    <div class="tb" data-key="Space" style="right:16em;bottom:8em">JUMP<br>BRAKE</div>
+    <div class="tb sm" data-key="KeyR" style="right:4em;bottom:34em">REPLAY</div>
+    <div class="tb sm" data-key="Escape" style="right:4em;top:3em">II</div>
+  </div>
+
+  <div id="fade"></div>
+  <div id="loading">Loading Sunset Bay…</div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
