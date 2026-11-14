@@ -25,6 +25,8 @@ Then open http://localhost:8080 (any static web server works; there is no build 
 - **Cinematics** – letterboxed cutscenes with scripted camera moves and subtitles.
 - **Story missions** – *First Wheels*, *Hot Slices* (pizza delivery) and *Sunset Sprint*
   (checkpoint race), plus 12 hidden gold stars.
+- **Graphics** – physically based sky and image-based reflections, PBR glass façades,
+  clear-coat car paint, soft shadows, HDR bloom, filmic tone mapping and 4x MSAA.
 - **Day / night cycle** – sunsets, starry nights, lit windows and street lamps.
 - **Resolutions** – renders at exactly **720p (1280×720)**, **1080p (1920×1080)** or
   **2160p / 4K (3840×2160)**; choose in *Settings*. The HUD scales with the picture.

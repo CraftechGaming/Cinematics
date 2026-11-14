@@ -1,8 +1,9 @@
 // Procedural characters (with a jointed rig for animation) and cars.
 import * as THREE from 'three';
 import { lerp, clamp, damp, angLerp } from './ctx.js';
+import { groundY } from './world.js';
 
-const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.75, ...o });
+const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, ...o });
 
 // ---------------------------------------------------------------- humans
 let HG = null;
@@ -17,7 +18,8 @@ function humanGeo() {
     uArm: new THREE.CapsuleGeometry(0.05, 0.2, 3, 8), lArm: new THREE.CapsuleGeometry(0.043, 0.2, 3, 8),
     hand: new THREE.SphereGeometry(0.055, 8, 8),
     uLeg: new THREE.CapsuleGeometry(0.078, 0.3, 3, 8), lLeg: new THREE.CapsuleGeometry(0.064, 0.3, 3, 8),
-    foot: new THREE.BoxGeometry(0.11, 0.08, 0.26),
+    foot: new THREE.CapsuleGeometry(0.055, 0.15, 3, 8).rotateX(Math.PI / 2).scale(1, 0.8, 1),
+    neck: new THREE.CylinderGeometry(0.05, 0.06, 0.1, 10),
   };
   return HG;
 }
@@ -33,7 +35,7 @@ export function makeHuman(o) {
   const hips = pivot(root, 0, 0.95, 0); mesh(geo.hips, pants, hips);
   const torso = pivot(hips, 0, 0.05, 0); mesh(geo.torso, shirt, torso, 0, 0.3, 0);
   const head = pivot(torso, 0, 0.66, 0);
-  mesh(geo.head, skin, head, 0, 0.1, 0); mesh(geo.hair, hair, head, 0, 0.105, -0.008);
+  mesh(geo.neck, skin, head, 0, -0.03, 0); mesh(geo.head, skin, head, 0, 0.1, 0).scale.set(0.95, 1.1, 1); mesh(geo.hair, hair, head, 0, 0.105, -0.008);
   mesh(geo.eye, eye, head, 0.045, 0.11, 0.115); mesh(geo.eye, eye, head, -0.045, 0.11, 0.115);
   const P = { root, hips, torso, head };
   for (const [s, n] of [[1, 'L'], [-1, 'R']]) {
@@ -93,35 +95,36 @@ function profiles(style, a) {
 function extrude(pts, width, bevel) {
   const sh = new THREE.Shape(); pts.forEach(([x, y], i) => (i ? sh.lineTo(x, y) : sh.moveTo(x, y)));
   const depth = width - bevel * 2;
-  const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2 });
+  const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 4 });
   g.translate(0, 0, -depth / 2); g.rotateY(-Math.PI / 2); // profile X -> car forward (+Z)
   return g;
 }
 
 const carGeo = {}, paints = {};
-const glassM = mat(0x1d2f40, { roughness: 0.08, metalness: 0.25 });
-const tireM = mat(0x17171a, { roughness: 0.95 }), hubM = mat(0xc9ccd2, { metalness: 0.2, roughness: 0.3 });
+const glassM = mat(0x0c1218, { roughness: 0.04, metalness: 0.95, envMapIntensity: 1.4 });
+const tireM = mat(0x17171a, { roughness: 0.95 }), hubM = mat(0xd4d7dc, { metalness: 1, roughness: 0.22 });
 export const headM = mat(0xfff6dd, { emissive: 0xfff0c0, emissiveIntensity: 0.3 });
 export const tailM = mat(0xaa1111, { emissive: 0xff2020, emissiveIntensity: 0.4 });
-const darkM = mat(0x202226);
+const darkM = mat(0x16171a, { roughness: 0.6 });
+const mirrorG = new THREE.BoxGeometry(0.16, 0.1, 0.2);
 
 export function makeVehicle(type, color) {
   const S = SPECS[type], a = S.L / 2;
   if (!carGeo[S.style]) {
     const p = profiles(S.style, a), van = S.style === 'van';
     const topY = Math.max(...p.cab.map((q) => q[1])), topPts = p.cab.filter((q) => q[1] === topY).map((q) => q[0]);
-    const wheel = new THREE.CylinderGeometry(S.r, S.r, 0.26, 18); wheel.rotateZ(Math.PI / 2);
-    const hub = new THREE.CylinderGeometry(S.r * 0.55, S.r * 0.55, 0.28, 10); hub.rotateZ(Math.PI / 2);
+    const wheel = new THREE.CylinderGeometry(S.r, S.r, 0.25, 28); wheel.rotateZ(Math.PI / 2);
+    const hub = new THREE.CylinderGeometry(S.r * 0.62, S.r * 0.62, 0.27, 10); hub.rotateZ(Math.PI / 2);
     carGeo[S.style] = {
-      body: extrude(p.body, S.W, 0.07), cab: extrude(p.cab, S.W * (van ? 1.02 : 0.86), 0.05),
-      roof: new THREE.BoxGeometry(S.W * 0.84, 0.05, Math.abs(topPts[0] - topPts[1]) + 0.1),
-      roofY: topY + 0.02, roofZ: (topPts[0] + topPts[1]) / 2, wheel, hub,
+      body: extrude(p.body, S.W, 0.11), cab: extrude(p.cab, S.W * (van ? 1.02 : 0.9), 0.06),
+      roof: new THREE.BoxGeometry(S.W * 0.9, 0.09, Math.abs(topPts[0] - topPts[1]) + 0.22),
+      roofY: topY + 0.035, roofZ: (topPts[0] + topPts[1]) / 2, wheel, hub,
       lamp: new THREE.BoxGeometry(0.36, 0.14, 0.08), noseY: S.style === 'sport' ? 0.42 : S.style === 'pickup' ? 0.75 : S.style === 'van' ? 0.7 : 0.58,
     };
   }
   const gm = carGeo[S.style];
   const col = color ?? S.color;
-  const paint = paints[col] || (paints[col] = mat(col, { roughness: 0.32, metalness: 0.08 }));
+  const paint = paints[col] || (paints[col] = new THREE.MeshPhysicalMaterial({ color: col, roughness: 0.42, metalness: 0.55, clearcoat: 1, clearcoatRoughness: 0.06, envMapIntensity: 1.2 }));
   const group = new THREE.Group(), tilt = new THREE.Group(); group.add(tilt);
   const add = (g, m, x, y, z, parent = tilt) => { const me = new THREE.Mesh(g, m); me.position.set(x, y, z); me.castShadow = true; parent.add(me); return me; };
   add(gm.body, paint, 0, 0, 0).receiveShadow = true;
@@ -130,14 +133,18 @@ export function makeVehicle(type, color) {
   for (const s of [1, -1]) {
     add(gm.lamp, headM, s * (S.W / 2 - 0.35), gm.noseY, a + 0.03);
     add(gm.lamp, tailM, s * (S.W / 2 - 0.35), gm.noseY + 0.08, -a - 0.03);
+    add(mirrorG, paint, s * (S.W / 2 + 0.06), gm.noseY + 0.42, a * 0.28);
   }
+  add(new THREE.BoxGeometry(S.W * 0.96, 0.16, 0.14), darkM, 0, gm.noseY - 0.24, a + 0.02);
+  add(new THREE.BoxGeometry(S.W * 0.96, 0.16, 0.14), darkM, 0, gm.noseY - 0.2, -a - 0.02);
+  add(new THREE.BoxGeometry(S.W * 0.45, 0.12, 0.06), darkM, 0, gm.noseY - 0.04, a + 0.05);
   if (S.style === 'sport') {
     add(new THREE.BoxGeometry(S.W * 0.9, 0.05, 0.35), paint, 0, 1.0, -a + 0.2);
     for (const s of [1, -1]) add(new THREE.BoxGeometry(0.06, 0.22, 0.2), darkM, s * 0.6, 0.88, -a + 0.2);
   }
   const wheels = [], steerPivots = [];
   for (const fz of [1, -1]) for (const s of [1, -1]) {
-    const piv = new THREE.Group(); piv.position.set(s * (S.W / 2 - 0.12), S.r, fz * (a - 0.78)); group.add(piv);
+    const piv = new THREE.Group(); piv.position.set(s * (S.W / 2 - 0.04), S.r, fz * (a - 0.78)); group.add(piv);
     const w = add(gm.wheel, tireM, 0, 0, 0, piv); add(gm.hub, hubM, 0, 0, 0, w);
     wheels.push(w); if (fz > 0) steerPivots.push(piv);
   }
@@ -158,7 +165,8 @@ export function driveVehicle(v, dt, thr, st, hb) {
 }
 
 export function syncVehicle(v, dt) {
-  v.group.position.set(v.x, 0, v.z); v.group.rotation.y = v.h;
+  v.gy = lerp(v.gy ?? 0, groundY(v.x, v.z), dt ? damp(14, dt) : 1);
+  v.group.position.set(v.x, v.gy, v.z); v.group.rotation.y = v.h;
   const spin = (v.v * dt) / v.spec.r;
   for (const w of v.wheels) w.rotation.x += spin;
   for (const p of v.steerPivots) p.rotation.y = -v.steer * 0.5;

@@ -31,7 +31,7 @@ function applyFrame(t, dt) {
   p.phase = lerp(a.p[4], b.p[4], k); p.amp = a.p[5];
   p.car = a.p[6] >= 0 ? G.vehicles[a.p[6]] : null;
   p.human.group.visible = !p.car;
-  p.human.group.position.set(p.x, p.y, p.z); p.human.group.rotation.y = p.ry;
+  p.human.group.position.set(p.x, p.y + (p.gy || 0), p.z); p.human.group.rotation.y = p.ry;
   poseHuman(p.human, p.phase, p.amp, p.y > 0.05 ? 'air' : 'move', t / HZ);
   G.vehicles.forEach((v, j) => {
     v.x = lerp(a.v[j * 4], b.v[j * 4], k); v.z = lerp(a.v[j * 4 + 1], b.v[j * 4 + 1], k);

@@ -2,7 +2,11 @@
 import * as THREE from 'three';
 import { G, RES, HALF, lerp, clamp, damp, angLerp, collideCircle, save, loadSave, loadSettings } from './ctx.js';
 import { initInput, keys, hit, consume, mouse, axis, endFrame } from './input.js';
-import { buildWorld, buildEnv } from './world.js';
+import { buildWorld, buildEnv, groundY } from './world.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { makeHuman, poseHuman, driveVehicle, syncVehicle, headM, tailM } from './entities.js';
 import { spawnTraffic, spawnPeds, updateTraffic, updatePeds } from './traffic.js';
 import { updateDialogue, dialogueCamera, updateCutscene } from './scenes.js';
@@ -22,19 +26,25 @@ const camera = new THREE.PerspectiveCamera(55, 16 / 9, 0.3, 4000);
 Object.assign(G, { scene, camera, renderer, look: new THREE.Vector3() });
 
 loadSettings();
-const world = buildWorld(scene), env = buildEnv(scene);
+const world = buildWorld(scene), env = buildEnv(scene, renderer);
+// HDR pipeline: multisampled float target -> bloom -> filmic tone mapping
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1280, 720, { type: THREE.HalfFloatType, samples: 4 }));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1280, 720), 0.3, 0.7, 1.0);
+composer.addPass(new RenderPass(scene, camera)); composer.addPass(bloom); composer.addPass(new OutputPass());
 
 // The game always renders at the exact chosen resolution (1280x720, 1920x1080 or 3840x2160)
 // into a 16:9 stage that is scaled to fit the window.
 function applyResolution() {
   const [w, h] = RES[G.settings.res];
   renderer.setSize(w, h, false);
+  composer.renderTarget1.samples = composer.renderTarget2.samples = h > 1080 ? 2 : 4;
+  composer.setSize(w, h);
   env.setShadowSize({ '720p': 1024, '1080p': 2048, '2160p': 4096 }[G.settings.res]);
   for (const b of document.querySelectorAll('#res button')) b.classList.toggle('sel', b.dataset.res === G.settings.res);
   $('resnote').textContent = `Rendering at ${w} × ${h}. ${G.settings.res === '2160p' ? '4K needs a strong graphics card — drop to 1080p if it feels slow.' : ''}`;
 }
 function fitStage() {
-  const s = Math.min(innerWidth / 16, innerHeight / 9);
+  const s = Math.min(document.body.clientWidth / 16, document.body.clientHeight / 9);
   stage.style.width = s * 16 + 'px'; stage.style.height = s * 9 + 'px'; stage.style.fontSize = (s * 9) / 100 + 'px';
 }
 addEventListener('resize', fitStage); fitStage(); applyResolution();
@@ -45,7 +55,7 @@ scene.add(player.human.group);
 initStory(scene);
 spawnTraffic(scene, 26); spawnPeds(scene, world.blocks, 34);
 applyUnlocks();
-const headlight = new THREE.SpotLight(0xfff0cc, 0, 70, 0.5, 0.5, 1.2); scene.add(headlight, headlight.target);
+const headlight = new THREE.SpotLight(0xfff0cc, 0, 80, 0.55, 0.6, 1.4); scene.add(headlight, headlight.target);
 
 // ---------------------------------------------------------------- player
 const cam = G.cam = { yaw: 0, pitch: 0.3, idle: 0, shake: 0 };
@@ -137,7 +147,7 @@ function updateCamera(dt) {
     cam.yaw = angLerp(cam.yaw, v.h + (v.v < -1 ? 0 : Math.PI), damp(3, dt)); cam.pitch = lerp(cam.pitch, 0.24, damp(2, dt));
   }
   const sp = v ? Math.abs(v.v) : 0;
-  tgt.set(p.x, v ? 1.35 : 1.45 + p.y, p.z);
+  tgt.set(p.x, v ? 1.3 + (v.gy || 0) : 1.45 + p.y + (p.gy || 0), p.z);
   let dist = v ? 8 + sp * 0.06 : 4.2;
   const cp = Math.cos(cam.pitch), ox = Math.sin(cam.yaw) * cp, oy = Math.sin(cam.pitch), oz = Math.cos(cam.yaw) * cp;
   // pull the camera in if a building is in the way
@@ -206,7 +216,8 @@ function tick() {
     updateTraffic(dt); updatePeds(dt);
     for (const v of G.vehicles) if (!v.ai && v.group.visible) { if (v !== player.car) v.v = lerp(v.v, 0, damp(3, dt)); syncVehicle(v, dt); }
     const p = player;
-    p.human.group.position.set(p.x, p.y, p.z); p.human.group.rotation.y = p.ry;
+    p.gy = lerp(p.gy ?? 0, groundY(p.x, p.z), damp(16, dt));
+    p.human.group.position.set(p.x, p.y + p.gy, p.z); p.human.group.rotation.y = p.ry;
     if (st !== 'play') { p.speed = lerp(p.speed, 0, damp(10, dt)); p.amp = clamp(p.speed / 8.5, 0, 1); }
     if (st === 'dialogue' && G.dlg?.npc) p.ry = angLerp(p.ry, Math.atan2(G.dlg.npc.x - p.x, G.dlg.npc.z - p.z), damp(8, dt));
     poseHuman(p.human, p.phase, p.amp, p.y > 0.05 ? 'air' : st === 'dialogue' && G.playerTalk ? 'talk' : 'move', G.time);
@@ -227,15 +238,16 @@ function tick() {
 
   // environment
   const focus = G.state === 'play' || G.state === 'replay' ? tgt.set(player.x, 0, player.z) : G.look;
-  env.update(G.tod, focus, camera.position, renderer);
+  env.update(G.tod, focus, camera.position);
   world.update(sim || st === 'replay' ? dt : 0, env.night);
-  headM.emissiveIntensity = 0.25 + env.night * 3; tailM.emissiveIntensity = 0.3 + env.night * 1.5;
+  headM.emissiveIntensity = 0.4 + env.night * 4; tailM.emissiveIntensity = 0.4 + env.night * 2.5;
   const c = player.car;
-  headlight.intensity = c && env.night > 0.3 ? 220 * env.night : 0;
+  headlight.intensity = c && env.night > 0.3 ? 900 * env.night : 0;
   if (c) { headlight.position.set(c.x + Math.sin(c.h) * 2, 0.9, c.z + Math.cos(c.h) * 2); headlight.target.position.set(c.x + Math.sin(c.h) * 22, 0, c.z + Math.cos(c.h) * 22); }
   engine(c ? c.v : 0, !!c && (G.state === 'play' || G.state === 'replay'));
 
-  renderer.render(scene, camera);
+  bloom.strength = 0.16 + env.night * 0.16;
+  composer.render();
   if (G.wantPhoto) { G.wantPhoto = false; capturePhoto(renderer); }
 
   fpsN++; const now = performance.now(); if (now - fpsT >= 500) { setBadge(Math.round((fpsN * 1000) / (now - fpsT))); fpsN = 0; fpsT = now; }
